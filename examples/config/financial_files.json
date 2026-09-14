@@ -1,0 +1,37 @@
+{
+  "store_id": "financial_files",
+  "title": "financial-data files",
+  "description": "Parquet/CSV under the financial-data roots, served through the reusable lake host",
+  "kind": "lake",
+  "engine": "files_inventory",
+  "transport": "http",
+  "web_host": "127.0.0.1",
+  "web_port": 5066,
+  "max_downloads": 2,
+  "backend": {
+    "entry_point": "financial_files",
+    "distribution": "financial-data-store",
+    "settings": {
+      "root_path": "/path/to/financial-data",
+      "include_globs": ["market_data/**/*.csv", "market_data/**/*.parquet"],
+      "holdout_start": "2025-01-01",
+      "cuts_dir": "./var/cuts",
+      "spool_dir": "./var/spool",
+      "resource_contracts": {
+        "market_data/example.csv": {
+          "event_time_column": "event_time",
+          "available_time_column": "available_at",
+          "timezone": "NAIVE_WALL_CLOCK",
+          "time_unit": null,
+          "frequency": "1d",
+          "availability": {
+            "label": "WINDOW_END",
+            "completion_lag_max": "1h",
+            "timezone_evidence": "PRODUCER_STATEMENT",
+            "use_class": "OFFLINE_DAY_GRANULAR"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "store_id": "memory_demo",
+  "title": "in-memory demo store",
+  "web_port": 5068,
+  "backend": {
+    "entry_point": "memory_store",
+    "distribution": "data-lake-service",
+    "settings": {
+      "store_id": "memory_demo",
+      "spool_dir": "./var/spool",
+      "resources": {
+        "prices": {
+          "body": "time,value\n2024-01-01,1\n2024-01-02,2\n",
+          "rows": [{"time": "2024-01-01", "value": 1}, {"time": "2024-01-02", "value": 2}],
+          "time_column": "time"
+        }
+      }
+    }
+  }
+}

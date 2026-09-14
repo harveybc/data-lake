@@ -19,11 +19,16 @@ selected by entry point:
 ```
 
 ```bash
-pip install .                      # the host
-pip install ../financial-data/store  # a provider, as its own distribution
+pip install "git+https://github.com/harveybc/data-lake.git"                              # the host
+pip install "git+https://github.com/harveybc/financial-data.git#subdirectory=store"       # a provider
 python -m data_lake_service.main --load_config host.json --print-identity
 python -m data_lake_service.main --load_config host.json
 ```
+
+A fresh install can serve something immediately without any other distribution:
+`examples/config/memory_demo.json` uses `memory_store`, the disposable provider shipped
+with the host. It is a demo, never production data. `examples/config/financial_files.json`
+is the real shape, and needs `financial-data-store`.
 
 `--print-identity` resolves the provider and prints what was resolved (distribution,
 version, module, capabilities, the SHA-256 of the settings and the provider's own source
@@ -61,6 +66,6 @@ rather than a fabricated entry-point list.
 
 ## Status
 
-Implemented and proven against a disposable provider and against the installed
-`financial-data-store`; **not deployed**. The running services are untouched. Migration
-sequence and scope exclusions: `data-gov/docs/STORE_PACKAGES_DESIGN.md`.
+Stage by stage in [docs/IMPLEMENTATION_STATE.md](docs/IMPLEMENTATION_STATE.md), which is
+the persistent state of this work. Design, migration sequence and scope exclusions:
+[data-gov/docs/STORE_PACKAGES_DESIGN.md](https://github.com/harveybc/data-gov/blob/master/docs/STORE_PACKAGES_DESIGN.md).
