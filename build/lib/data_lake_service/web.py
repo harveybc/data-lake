@@ -1,0 +1,315 @@
+"""The lake HTTP contract, unchanged from the one data-gov's http_lake already consumes.
+
+What changed against the financial host it is ported from: the data lives behind a
+backend resolved from an entry point, and an operation the backend did not declare is
+refused with 422 instead of being approximated. The routes, status codes and headers —
+including `X-Content-SHA256`, `X-Source-SHA256`, `X-Delivery`, `X-Time-Column` and the
+four `X-Availability-*` headers — are identical, because consumers depend on them.
+"""
+
+from __future__ import annotations
+
+import io
+import os
+import re
+import threading
+from datetime import date
+from pathlib import Path
+
+from flask import Flask, jsonify, request, send_file
+
+from .auth import check_bearer, load_token
+from .errors import (REFUSAL_STATUS, HoldoutError, LakeError, UnparseableError,
+                     UnsupportedError, classify)
+
+DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+RETRY_AFTER = "30"
+
+
+def _day(value):
+    if not isinstance(value, str) or not DAY_RE.match(value):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _day_range(start, end):
+    lo, hi = _day(start), _day(end)
+    if lo is None or hi is None or lo > hi:
+        return None
+    return lo, hi
+
+
+def _lake_error(exc):
+    """Map a backend refusal to the status the governance kernel already maps.
+
+    A provider is packaged separately, so its exception classes are its own; the kind is
+    classified rather than matched against this module's identities. An exception the host
+    cannot classify is re-raised: a defect must not be served as a refusal.
+    """
+    kind = classify(exc)
+    if kind is None:
+        raise exc
+    if kind == "HOLDOUT":
+        return jsonify({"error": "holdout"}), 403
+    if kind == "NOT_FOUND":
+        return jsonify({"error": "unknown resource"}), 404
+    if kind in ("UNSUPPORTED", "UNPARSEABLE"):
+        return jsonify({"error": str(exc)}), REFUSAL_STATUS[kind]
+    return jsonify({"error": "invalid from/to"}), 400
+
+
+class _SlotFile(io.FileIO):
+    """The open delivery; closing it returns the download slot exactly once."""
+
+    def __init__(self, path, release):
+        self._release = None
+        super().__init__(path, "rb")
+        self._release = release
+
+    def close(self):
+        release, self._release = self._release, None
+        try:
+            super().close()
+        finally:
+            if release is not None:
+                release()
+
+
+class _ReleasingHandle:
+    """A retained delivery descriptor whose close returns the download slot once.
+
+    send_file answers a retained handle in direct passthrough and the development server
+    closes only the file wrapper, so `Response.call_on_close` cannot be the only release
+    (observed 2026-09-13 in the financial host: two deliveries exhausted the slots for the
+    life of the process).
+    """
+
+    def __init__(self, handle, release):
+        self._handle = handle
+        self._release = release
+
+    def read(self, size=-1):
+        return self._handle.read(size)
+
+    @property
+    def closed(self):
+        return self._handle.closed
+
+    def close(self):
+        release, self._release = self._release, None
+        try:
+            self._handle.close()
+        finally:
+            if release is not None:
+                release()
+
+    def __getattr__(self, name):
+        return getattr(self._handle, name)
+
+
+def create_app(config: dict, backend, identity: dict | None = None) -> Flask:
+    app = Flask(__name__)
+    app.secret_key = config.get("secret_key") or "x"
+    identity = dict(identity or {})
+    capabilities = set(identity.get("capabilities") or backend.capabilities())
+    slots = threading.BoundedSemaphore(int(config.get("max_downloads") or 2))
+    max_read_rows = int(config.get("max_read_rows") or 8000)
+    max_span_days = int(config.get("max_span_days") or 366)
+    if hasattr(backend, "sweep"):
+        backend.sweep()
+
+    def _auth():
+        if check_bearer(request.headers.get("Authorization"), load_token(config)):
+            return None
+        return jsonify({"error": "unauthenticated"}), 401
+
+    def _needs(capability):
+        if capability in capabilities:
+            return None
+        return jsonify({"error": f"this store does not support {capability}"}), 422
+
+    @app.get("/healthz")
+    def healthz():
+        return "ok\n", 200, {"Content-Type": "text/plain"}
+
+    @app.get("/api/v1/host")
+    def api_host():
+        """What this host is running: kind, transport and the resolved provider identity."""
+        denied = _auth()
+        if denied:
+            return denied
+        return jsonify({"kind": config.get("kind") or "lake", "transport": config.get("transport") or "http",
+                        "store_id": config.get("store_id"), "backend": identity,
+                        "capabilities": sorted(capabilities)})
+
+    @app.get("/api/v1/describe")
+    def api_describe():
+        denied = _auth() or _needs("describe")
+        if denied:
+            return denied
+        meta = dict(backend.describe())
+        meta.setdefault("lake_id", config.get("store_id"))
+        meta.setdefault("kind", config.get("kind") or "lake")
+        meta.setdefault("transport", config.get("transport") or "http")
+        return jsonify(meta)
+
+    @app.get("/api/v1/storage")
+    def api_storage():
+        denied = _auth() or _needs("storage")
+        if denied:
+            return denied
+        return jsonify(backend.storage())
+
+    @app.get("/api/v1/discover")
+    def api_discover():
+        denied = _auth() or _needs("discover")
+        if denied:
+            return denied
+        return jsonify({"resources": backend.discover()})
+
+    @app.get("/api/v1/coverage")
+    def api_coverage():
+        denied = _auth() or _needs("coverage")
+        if denied:
+            return denied
+        try:
+            return jsonify(backend.coverage(request.args.get("resource")))
+        except Exception as exc:
+            return _lake_error(exc)
+
+    @app.get("/api/v1/read")
+    def api_read():
+        denied = _auth() or _needs("read")
+        if denied:
+            return denied
+        resource = request.args.get("resource")
+        start, end = request.args.get("from"), request.args.get("to")
+        if not start or not end:
+            return jsonify({"error": "from and to are required"}), 400
+        days = _day_range(start, end)
+        if days is None:
+            return jsonify({"error": "invalid from/to"}), 400
+        if (days[1] - days[0]).days > max_span_days:
+            return jsonify({"error": "date span exceeds limit"}), 400
+        holdout = getattr(backend, "params", {}).get("holdout_start")
+        if holdout and end >= str(holdout)[:10]:
+            return jsonify({"error": "holdout"}), 403
+        try:
+            payload = backend.read(resource, start=start, end=end)
+        except Exception as exc:
+            return _lake_error(exc)
+        if len(payload.get("rows") or []) > max_read_rows:
+            return jsonify({"error": "result too large; narrow the range"}), 400
+        return jsonify(payload)
+
+    def _range_or_400():
+        start, end = request.args.get("from"), request.args.get("to")
+        if (start is not None or end is not None) and _day_range(start, end) is None:
+            return None, (jsonify({"error": "invalid from/to"}), 400)
+        return (start, end), None
+
+    @app.get("/api/v1/download")
+    def api_download():
+        denied = _auth() or _needs("download")
+        if denied:
+            return denied
+        bounds, refusal = _range_or_400()
+        if refusal:
+            return refusal
+        start, end = bounds
+        resource = request.args.get("resource") or ""
+        if not slots.acquire(blocking=False):
+            return jsonify({"error": "download slots busy"}), 503, {"Retry-After": RETRY_AFTER}
+        try:
+            info = backend.download(resource, start=start, end=end)
+            handle = _SlotFile(info["path"], slots.release)
+        except Exception as exc:
+            slots.release()
+            return _lake_error(exc)
+        except BaseException:
+            slots.release()
+            raise
+        try:
+            if backend.is_spool(info["path"]):
+                os.unlink(info["path"])
+            response = send_file(handle, mimetype="application/octet-stream", as_attachment=True,
+                                 download_name=info["filename"], conditional=False, etag=False)
+        except BaseException:
+            handle.close()
+            raise
+        return _delivery_headers(response, info)
+
+    @app.get("/api/v2/download")
+    def api_governed_download():
+        denied = _auth() or _needs("governed_download")
+        if denied:
+            return denied
+        bounds, refusal = _range_or_400()
+        if refusal:
+            return refusal
+        start, end = bounds
+        resource = request.args.get("resource") or ""
+        if not slots.acquire(blocking=False):
+            return jsonify({"error": "download slots busy"}), 503, {"Retry-After": RETRY_AFTER}
+        try:
+            info = backend.governed_download(resource, start=start, end=end)
+            handle = _ReleasingHandle(info["handle"], slots.release)
+        except Exception as exc:
+            slots.release()
+            return _lake_error(exc)
+        except BaseException:
+            slots.release()
+            raise
+        try:
+            response = send_file(handle, mimetype="application/octet-stream", as_attachment=True,
+                                 download_name=info["filename"], conditional=False, etag=False)
+            response.call_on_close(handle.close)
+        except BaseException:
+            handle.close()
+            raise
+        response = _delivery_headers(response, info)
+        contract = str(info.get("availability_contract_sha256") or "")
+        if len(contract) != 64:
+            raise UnsupportedError("the backend delivered a governed body without a contract identity")
+        response.headers["X-Availability-Contract-SHA256"] = contract
+        scope = info.get("availability") or {}
+        lag = scope.get("completion_lag_max")
+        response.headers["X-Availability-Label"] = str(scope.get("label") or "UNKNOWN")
+        response.headers["X-Availability-Completion-Lag-Max"] = "" if lag is None else str(lag)
+        response.headers["X-Timezone-Evidence"] = str(scope.get("timezone_evidence") or "UNKNOWN")
+        response.headers["X-Availability-Use"] = str(scope.get("use_class") or "UNDECLARED")
+        return response
+
+    @app.post("/api/v1/metrics")
+    def api_metrics():
+        denied = _auth() or _needs("write_metrics")
+        if denied:
+            return denied
+        try:
+            return jsonify(backend.write_metrics(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            return _lake_error(exc)
+
+    def _delivery_headers(response, info):
+        quoted = str(info["filename"]).replace("\\", "\\\\").replace('"', '\\"')
+        response.headers["Content-Disposition"] = f'attachment; filename="{quoted}"'
+        response.headers["Content-Length"] = str(info["bytes"])
+        response.headers["X-Content-SHA256"] = info["sha256"]
+        response.headers["X-Source-SHA256"] = info.get("source_sha256") or ""
+        response.headers["X-Delivery"] = info.get("delivery") or ""
+        response.headers["X-Time-Column"] = info.get("time_column") or ""
+        return response
+
+    return app
+
+
+def serve(config: dict, backend, identity: dict | None = None) -> int:
+    app = create_app(config, backend, identity)
+    host = config.get("web_host") or "127.0.0.1"
+    port = int(config.get("web_port") or 5060)
+    print(f"data-lake host ({config.get('store_id')}) → http://{host}:{port}")
+    app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
+    return 0
