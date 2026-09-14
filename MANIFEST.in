@@ -1,0 +1,2 @@
+include data_lake_service/templates/*.html
+include data_lake_service/static/css/*.css

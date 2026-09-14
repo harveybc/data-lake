@@ -52,6 +52,25 @@ identity) without serving anything.
   `refusal` attribute) and re-raises what it cannot classify instead of serving a 500 as a
   polite 403 — or the reverse, which is what the first parity run actually found.
 
+## Operator console
+
+The host serves an AdminLTE console on the same interface it listens on:
+
+| page | what it is for |
+|---|---|
+| `/` | store identity, the provider resolved at start with its distribution, version, module, capabilities and settings digest, and the resource inventory |
+| `/resource?resource=…` | coverage and the producer contract of one resource, including its availability block |
+| `/settings` | the effective configuration, with every secret redacted, and a **pending** save |
+
+Saving writes a pending JSON file at `operator_config_path`. **A pending file is not an
+authorization and not a deployment**: activation remains the service's configuration load.
+Secrets are never rendered and a redacted value cannot be saved back.
+
+Desktop and mobile are proven in a real browser, not asserted:
+`tools/console_screenshots.py` drives six pages at 1440×900 and 390×844, checks that every
+asset is served by this host (no CDN), that nothing overflows horizontally, and writes the
+PNGs and a receipt to [docs/console/](docs/console/).
+
 ## Tests
 
 ```bash

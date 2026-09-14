@@ -1,2 +1,5 @@
 [console_scripts]
 data-lake = data_lake_service.main:main
+
+[datalake.backends]
+memory_store = data_lake_service.testing.memory_store:backend

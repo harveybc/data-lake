@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ resource }} | {{ store_id }}{% endblock %}
+{% block content %}
+<h1 class="h5 text-monospace">{{ resource }}</h1>
+<p><a href="{{ url_for('console_home') }}">&larr; inventory</a></p>
+{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+
+<div class="row">
+  <div class="col-12 col-lg-6">
+    <div class="card bg-dark"><div class="card-header"><h2 class="h6 mb-0">Coverage</h2></div>
+      <div class="card-body"><div class="table-responsive"><table class="table table-sm table-dark mb-0">
+        <tbody>{% for key, value in coverage.items() %}
+          <tr><th class="text-nowrap">{{ key }}</th><td class="text-monospace">{{ value }}</td></tr>
+        {% endfor %}</tbody>
+      </table></div></div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card bg-dark"><div class="card-header"><h2 class="h6 mb-0">Producer contract</h2></div>
+      <div class="card-body">
+        {% if contract %}
+        <div class="table-responsive"><table class="table table-sm table-dark mb-0">
+          <tbody>{% for key, value in contract.items() %}
+            <tr><th class="text-nowrap">{{ key }}</th><td class="text-monospace">{{ value }}</td></tr>
+          {% endfor %}</tbody>
+        </table></div>
+        {% else %}
+        <p class="text-muted mb-0">This resource declares no availability contract, so it
+        cannot be delivered under governance.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

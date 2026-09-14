@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ store_id }} | inventory{% endblock %}
+{% block content %}
+<h1 class="h4">{{ meta.title or store_id }}</h1>
+<p class="text-muted">{{ meta.description or "" }}</p>
+
+<div class="row">
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="small-box bg-info"><div class="inner">
+      <h3>{{ resources|length }}</h3><p>resources</p></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="small-box bg-secondary"><div class="inner">
+      <h3>{{ fmt_bytes(storage.lake_bytes) }}</h3><p>store size</p></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="small-box bg-secondary"><div class="inner">
+      <h3>{{ kind }}</h3><p>kind · {{ transport }}</p></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="small-box bg-secondary"><div class="inner">
+      <h3>{{ identity.version or "—" }}</h3><p>{{ identity.distribution or "no provider" }}</p></div></div>
+  </div>
+</div>
+
+<div class="card bg-dark">
+  <div class="card-header"><h2 class="h6 mb-0">Provider resolved at start</h2></div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Entry point</dt><dd class="col-sm-9"><code>{{ identity.entry_point }}</code></dd>
+      <dt class="col-sm-3">Distribution</dt><dd class="col-sm-9"><code>{{ identity.distribution }} {{ identity.version }}</code></dd>
+      <dt class="col-sm-3">Module</dt><dd class="col-sm-9"><code>{{ identity.module }}</code></dd>
+      <dt class="col-sm-3">Capabilities</dt><dd class="col-sm-9">{{ identity.capabilities|join(", ") }}</dd>
+      <dt class="col-sm-3">Settings digest</dt><dd class="col-sm-9"><code>{{ identity.settings_sha256 }}</code></dd>
+      <dt class="col-sm-3">Source</dt><dd class="col-sm-9"><code>{{ identity.source_identity }}</code></dd>
+    </dl>
+  </div>
+</div>
+
+<div class="card bg-dark mt-3">
+  <div class="card-header"><h2 class="h6 mb-0">Resources</h2></div>
+  <div class="card-body p-0">
+    {% if error %}<div class="alert alert-warning m-3" role="alert">{{ error }}</div>{% endif %}
+    <div class="table-responsive"><table class="table table-sm table-dark mb-0">
+      <thead><tr><th>Resource</th><th>Bytes</th><th>Time column</th><th></th></tr></thead>
+      <tbody>
+      {% for resource in resources %}
+        <tr>
+          <td class="text-monospace">{{ resource.resource_id }}</td>
+          <td>{{ fmt_bytes(resource.bytes) }}</td>
+          <td>{{ resource.time_column or "—" }}</td>
+          <td><a href="{{ url_for('console_resource', resource=resource.resource_id) }}">metadata</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-muted">No resource is inventoried.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}

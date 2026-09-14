@@ -1,0 +1,86 @@
+{
+ "schema": "console_browser_acceptance.v1",
+ "base": "http://127.0.0.1:<port>",
+ "pages": {
+  "inventory-desktop": {
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "path": "/",
+   "requests": 3,
+   "external_requests": [],
+   "failed_requests": [],
+   "horizontal_overflow_px": 0,
+   "contains_expected": true,
+   "screenshot": "lake-inventory-desktop.png"
+  },
+  "inventory-mobile": {
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "path": "/",
+   "requests": 3,
+   "external_requests": [],
+   "failed_requests": [],
+   "horizontal_overflow_px": 0,
+   "contains_expected": true,
+   "screenshot": "lake-inventory-mobile.png"
+  },
+  "resource-desktop": {
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "path": "/resource?resource=prices",
+   "requests": 3,
+   "external_requests": [],
+   "failed_requests": [],
+   "horizontal_overflow_px": 0,
+   "contains_expected": true,
+   "screenshot": "lake-resource-desktop.png"
+  },
+  "resource-mobile": {
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "path": "/resource?resource=prices",
+   "requests": 3,
+   "external_requests": [],
+   "failed_requests": [],
+   "horizontal_overflow_px": 0,
+   "contains_expected": true,
+   "screenshot": "lake-resource-mobile.png"
+  },
+  "settings-desktop": {
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "path": "/settings",
+   "requests": 3,
+   "external_requests": [],
+   "failed_requests": [],
+   "horizontal_overflow_px": 0,
+   "contains_expected": true,
+   "screenshot": "lake-settings-desktop.png"
+  },
+  "settings-mobile": {
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "path": "/settings",
+   "requests": 3,
+   "external_requests": [],
+   "failed_requests": [],
+   "horizontal_overflow_px": 0,
+   "contains_expected": true,
+   "screenshot": "lake-settings-mobile.png"
+  }
+ },
+ "problems": [],
+ "ok": true
+}

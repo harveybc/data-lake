@@ -10,15 +10,18 @@ four `X-Availability-*` headers — are identical, because consumers depend on t
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import threading
 from datetime import date
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_file
+from flask import (Flask, jsonify, redirect, render_template, request, send_file,
+                   url_for)
 
 from .auth import check_bearer, load_token
+from .operator_config import editable_config, pending_config, write_pending
 from .errors import (REFUSAL_STATUS, HoldoutError, LakeError, UnparseableError,
                      UnsupportedError, classify)
 
@@ -110,8 +113,19 @@ class _ReleasingHandle:
         return getattr(self._handle, name)
 
 
+def _fmt_bytes(n):
+    n = float(n or 0)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.1f} {unit}" if unit != "B" else f"{int(n)} B"
+        n /= 1024
+    return f"{n:.1f} TB"
+
+
 def create_app(config: dict, backend, identity: dict | None = None) -> Flask:
-    app = Flask(__name__)
+    here = Path(__file__).resolve().parent
+    app = Flask(__name__, template_folder=str(here / "templates"),
+                static_folder=str(here / "static"), static_url_path="/static")
     app.secret_key = config.get("secret_key") or "x"
     identity = dict(identity or {})
     capabilities = set(identity.get("capabilities") or backend.capabilities())
@@ -303,7 +317,66 @@ def create_app(config: dict, backend, identity: dict | None = None) -> Flask:
         response.headers["X-Time-Column"] = info.get("time_column") or ""
         return response
 
+    # ---- operator console -------------------------------------------------
+    # Read-mostly, on the interface the service already listens on, with no secret ever
+    # rendered. Saving writes a *pending* file; activation stays the configuration load.
+    def _page_context():
+        return {"store_id": config.get("store_id"), "kind": config.get("kind") or "lake",
+                "transport": config.get("transport") or "http", "identity": identity,
+                "fmt_bytes": _fmt_bytes}
+
+    @app.get("/")
+    def console_home():
+        meta, resources, storage, error = {}, [], {}, None
+        try:
+            if "describe" in capabilities:
+                meta = backend.describe()
+            if "storage" in capabilities:
+                storage = backend.storage()
+            if "discover" in capabilities:
+                resources = backend.discover()
+        except Exception as exc:  # the console states the failure instead of showing nothing
+            error = f"{type(exc).__name__}: {exc}"
+        return render_template("dashboard.html", meta=meta, resources=resources,
+                               storage=storage, error=error, **_page_context())
+
+    @app.get("/resource")
+    def console_resource():
+        resource = request.args.get("resource") or ""
+        coverage, error = {}, None
+        try:
+            if "coverage" in capabilities:
+                coverage = backend.coverage(resource)
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+        settings = (config.get("backend") or {}).get("settings") or {}
+        contract = (settings.get("resource_contracts") or {}).get(resource)
+        return render_template("resource.html", resource=resource, coverage=coverage,
+                               contract=contract, error=error, **_page_context())
+
+    @app.route("/settings", methods=["GET", "POST"])
+    def console_settings():
+        pending_path = config.get("operator_config_path")
+        error = saved = None
+        text = json.dumps(editable_config(config), indent=1, sort_keys=True)
+        if request.method == "POST":
+            text = request.form.get("configuration") or ""
+            try:
+                proposed = pending_config(config, text)
+                if not pending_path:
+                    raise ValueError("this service has no operator_config_path, so a pending "
+                                     "configuration has nowhere to go")
+                write_pending(pending_path, proposed)
+                saved = True
+            except ValueError as exc:
+                error = str(exc)
+        return render_template("settings.html", configuration=text, error=error, saved=saved,
+                               pending_path=pending_path,
+                               pending_exists=bool(pending_path and Path(pending_path).is_file()),
+                               **_page_context())
+
     return app
+
 
 
 def serve(config: dict, backend, identity: dict | None = None) -> int:
