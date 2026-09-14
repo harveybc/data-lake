@@ -94,6 +94,11 @@ retry and exact reconciliation. This does **not** make financial resources
 eligible: their producer-derived availability contracts remain unfinished.
 See the [deployment receipt](https://github.com/harveybc/predictor/blob/master/docs/handoffs/MUSASHI_STORE_HOSTS_PRODUCTION_ACCEPTANCE_2026_09_14.md).
 
+The subsequent [four-consumer production check](https://github.com/harveybc/predictor/blob/master/docs/handoffs/MUSASHI_SYNTHETIC_CATALOG_AND_FOUR_CONSUMERS_ACCEPTANCE_2026_09_14.md)
+completed preprocessor, feature-eng, feature-extractor and predictor through an
+expanded synthetic catalogue. Processing-causality tests and offline DOIN
+adoption are separate next steps, not implied by successful delivery.
+
 ## Use with a coding agent
 
 Start with [AGENTS.md](AGENTS.md), the implementation state below and

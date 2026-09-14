@@ -14,7 +14,13 @@ States: `PENDING` | `IMPLEMENTED` | `PROVEN_DISPOSABLE` | `PUBLISHED` | `DEPLOYE
 | 3. Integrate | parity with the adapter it replaces: inventory, bytes, availability, cuts, receipts, outcomes, retries | `PROVEN_DISPOSABLE` — 8/8 data routes identical, `docs/PARITY.md` |
 | 4. Interface | AdminLTE configuration and inventory views, resource metadata, desktop and mobile | `PROVEN_DISPOSABLE` — `tests/test_console.py` (10) and `tools/console_screenshots.py`: six pages driven in a real browser at 1440×900 and 390×844, every asset served by this host, zero horizontal overflow; receipt and PNGs in `docs/console/` |
 | 5. Put into use | controlled transition over the same data and IDs; governed micro-run through both hosts with exact reconciliation | `PROVEN_PRODUCTION` on 2026-09-14 for synthetic transport; financial inventory unchanged, financial downloads still require producer contracts |
-| 6. Adopt | consumer configurations updated; new campaigns use this route by default | `PENDING` |
+| 6. Adopt | consumer configurations updated; new campaigns use this route by default | `PROVEN_PRODUCTION` for bounded synthetic runs of preprocessor, feature-eng, feature-extractor and predictor; causal processing tests and offline DOIN integration remain pending |
+
+The expanded synthetic catalogue was activated on 2026-09-14 without changing
+the financial store. All four consumers completed their real pipelines and
+recorded expected failures/refusals through the new hosts. This proves governed
+mechanics, not financial eligibility or causal correctness of every transform.
+[Acceptance and next work](https://github.com/harveybc/predictor/blob/master/docs/handoffs/MUSASHI_SYNTHETIC_CATALOG_AND_FOUR_CONSUMERS_ACCEPTANCE_2026_09_14.md).
 
 ## Requirements this host must satisfy
 
