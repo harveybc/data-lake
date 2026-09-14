@@ -1,7 +1,8 @@
 # data-lake
 
 A reusable **lake host**: the HTTP contract, the configuration, the console surface and the
-backend seam. It holds no data, no financial knowledge and no governance decision.
+provider interface. The host does not own datasets or make governance decisions;
+the selected provider reads the configured source files.
 
 Where the data lives is a separate, independently packaged distribution — a *provider* —
 selected by entry point:
@@ -84,6 +85,27 @@ throwaway virtual environment so that discovery is proven through a real install
 rather than a fabricated entry-point list.
 
 ## Status
+
+Both this repository and [data-warehouse](https://github.com/harveybc/data-warehouse)
+are public. The installed hosts were deployed on 2026-09-14 with an unchanged
+5,275-resource financial inventory. A separate two-row synthetic source completed
+a governed delivery and warehouse report in production, including an idempotent
+retry and exact reconciliation. This does **not** make financial resources
+eligible: their producer-derived availability contracts remain unfinished.
+See the [deployment receipt](https://github.com/harveybc/predictor/blob/master/docs/handoffs/MUSASHI_STORE_HOSTS_PRODUCTION_ACCEPTANCE_2026_09_14.md).
+
+## Use with a coding agent
+
+Start with [AGENTS.md](AGENTS.md), the implementation state below and
+[data-gov's integration guide](https://github.com/harveybc/data-gov/blob/master/docs/INTEGRATION_EXAMPLES.md).
+Ask the agent to install the host and external provider in an isolated environment,
+resolve the configured entry point, and run the contract tests against disposable
+data. Require a receipt identifying the delivered bytes, producer contract and
+outcome before calling an integration complete. Inventories alone are not delivery
+proof. Never use a production data directory as a mutable checkout or test fixture.
+Record the exact package commits; a passing disposable test is not a deployment.
+
+## Work plan
 
 Stage by stage in [docs/IMPLEMENTATION_STATE.md](docs/IMPLEMENTATION_STATE.md), which is
 the persistent state of this work. Design, migration sequence and scope exclusions:
