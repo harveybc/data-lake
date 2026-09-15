@@ -9,6 +9,7 @@ four `X-Availability-*` headers — are identical, because consumers depend on t
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import os
@@ -289,6 +290,13 @@ def create_app(config: dict, backend, identity: dict | None = None) -> Flask:
         if len(contract) != 64:
             raise UnsupportedError("the backend delivered a governed body without a contract identity")
         response.headers["X-Availability-Contract-SHA256"] = contract
+        # S2: the canonical contract itself, base64 so it survives a header. A backend that
+        # does not publish it is not an error here; downstream the reference simply stays
+        # unresolvable, which is reported as UNRESOLVED rather than filled in.
+        canonical = info.get("availability_contract_canonical")
+        if isinstance(canonical, str) and canonical:
+            response.headers["X-Availability-Contract"] = base64.b64encode(
+                canonical.encode("ascii")).decode("ascii")
         scope = info.get("availability") or {}
         lag = scope.get("completion_lag_max")
         response.headers["X-Availability-Label"] = str(scope.get("label") or "UNKNOWN")
