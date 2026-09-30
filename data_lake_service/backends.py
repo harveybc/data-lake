@@ -21,6 +21,9 @@ CAPABILITIES = (
     "download",       # the ungoverned delivery of bytes
     "governed_download",  # the delivery under an availability contract, with its identity
     "write_metrics",  # accept a report back from a consumer
+    # Content-addressed bytes. Not implied by write_metrics or by registration.
+    "byte_upload",
+    "byte_read",
 )
 
 
@@ -89,6 +92,12 @@ class LakeBackendBase:
 
     def write_metrics(self, report: dict):
         self._refuse("write_metrics")
+
+    def put_bytes(self, content: bytes, *, grant: str) -> str:
+        self._refuse("byte_upload")
+
+    def get_bytes(self, digest: str, *, grant: str) -> bytes:
+        self._refuse("byte_read")
 
     def is_spool(self, path) -> bool:
         return False
