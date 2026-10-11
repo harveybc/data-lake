@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="data-lake-service",
-    version="0.1.0",
+    version="0.1.1",
     description="Reusable lake host: HTTP contract, configuration and backend interface",
     packages=find_packages(include=["data_lake_service", "data_lake_service.*"]),
     include_package_data=True,
