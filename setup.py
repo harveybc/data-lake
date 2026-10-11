@@ -11,7 +11,8 @@ setup(
         "console_scripts": ["data-lake=data_lake_service.main:main"],
         # A disposable provider shipped with the host, so a fresh install can serve
         # something without any other distribution. It is a demo, never production data.
-        "datalake.backends": ["memory_store=data_lake_service.testing.memory_store:backend"],
+        "datalake.backends": ["memory_store=data_lake_service.testing.memory_store:backend",
+                              "cas_file_store=data_lake_service.byte_store:file_backend"],
     },
     install_requires=["flask>=3.0"],
     python_requires=">=3.10",

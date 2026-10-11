@@ -10,6 +10,7 @@ four `X-Availability-*` headers — are identical, because consumers depend on t
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import os
@@ -304,6 +305,60 @@ def create_app(config: dict, backend, identity: dict | None = None) -> Flask:
         response.headers["X-Timezone-Evidence"] = str(scope.get("timezone_evidence") or "UNKNOWN")
         response.headers["X-Availability-Use"] = str(scope.get("use_class") or "UNDECLARED")
         return response
+
+    # -- content-addressed objects (byte_upload / byte_read) ------------------------------
+    # The URL names the SHA-256; the host hashes the request body before the backend sees it
+    # and the backend reads its copy back before answering. A digest is integrity evidence,
+    # not availability or truth, and storing an object registers nothing in data-gov.
+    def _object_refusal(exc):
+        from .byte_store import ByteStoreRefusal
+
+        reason = str(exc)
+        if isinstance(exc, ByteStoreRefusal):
+            status = {"MISSING": 404, "NOT_A_SHA256": 400, "GRANT_REFUSED": 403,
+                      "OBJECT_TOO_LARGE": 413, "HASH_MISMATCH": 409}.get(reason, 400)
+            return jsonify({"error": reason}), status
+        return _lake_error(exc)
+
+    def _object_digest(digest):
+        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            return jsonify({"error": "NOT_A_SHA256"}), 400
+        return None
+
+    @app.put("/api/v1/objects/<digest>")
+    def api_object_put(digest):
+        from .byte_store import HOST_BEARER_GRANT
+
+        denied = _auth() or _needs("byte_upload") or _object_digest(digest)
+        if denied:
+            return denied
+        data = request.get_data(cache=False)
+        if hashlib.sha256(data).hexdigest() != digest:
+            return jsonify({"error": "HASH_MISMATCH: body does not hash to the URL digest"}), 400
+        try:
+            existed = bool(backend.exists(digest, grant=HOST_BEARER_GRANT)) if hasattr(backend, "exists") else False
+            stored = backend.put_bytes(data, grant=HOST_BEARER_GRANT)
+        except Exception as exc:
+            return _object_refusal(exc)
+        if stored != digest:
+            return jsonify({"error": "HASH_MISMATCH: store answered another digest"}), 500
+        return jsonify({"digest": digest, "size": len(data), "stored": not existed}), (200 if existed else 201)
+
+    @app.get("/api/v1/objects/<digest>")
+    def api_object_get(digest):
+        from .byte_store import HOST_BEARER_GRANT
+
+        denied = _auth() or _needs("byte_read") or _object_digest(digest)
+        if denied:
+            return denied
+        try:
+            blob = backend.get_bytes(digest, grant=HOST_BEARER_GRANT)
+        except Exception as exc:
+            return _object_refusal(exc)
+        if hashlib.sha256(blob).hexdigest() != digest:
+            return jsonify({"error": "HASH_MISMATCH"}), 409
+        return blob, 200, {"Content-Type": "application/octet-stream", "X-Content-SHA256": digest,
+                           "Content-Length": str(len(blob))}
 
     @app.post("/api/v1/metrics")
     def api_metrics():
